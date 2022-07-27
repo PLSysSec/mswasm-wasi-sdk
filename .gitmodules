@@ -1,0 +1,6 @@
+[submodule "src/llvm-project"]
+	path = src/llvm-project
+	url = git@github.com:PLSysSec/mswasm-llvm.git
+[submodule "src/wasi-libc"]
+	path = src/wasi-libc
+	url = git@github.com:PLSysSec/mswasm-wasi-libc.git
