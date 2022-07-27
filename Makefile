@@ -86,9 +86,9 @@ build/llvm.BUILT:
 
 build/wasi-libc.BUILT: build/llvm.BUILT
 	$(MAKE) -C $(ROOT_DIR)/src/wasi-libc \
-		CC=$(BUILD_PREFIX)/bin/clang \
-		AR=$(BUILD_PREFIX)/bin/llvm-ar \
-		NM=$(BUILD_PREFIX)/bin/llvm-nm \
+		WASM_CC=$(BUILD_PREFIX)/bin/clang \
+		WASM_AR=$(BUILD_PREFIX)/bin/llvm-ar \
+		WASM_NM=$(BUILD_PREFIX)/bin/llvm-nm \
 		SYSROOT=$(BUILD_PREFIX)/share/wasi-sysroot
 	touch build/wasi-libc.BUILT
 
@@ -121,69 +121,73 @@ build/compiler-rt.BUILT: build/llvm.BUILT build/wasi-libc.BUILT
 	cp -R $(ROOT_DIR)/build/llvm/lib/clang $(BUILD_PREFIX)/lib/
 	touch build/compiler-rt.BUILT
 
-# Flags for libcxx and libcxxabi.
-LIBCXX_CMAKE_FLAGS = \
-    -DCMAKE_C_COMPILER_WORKS=ON \
-    -DCMAKE_CXX_COMPILER_WORKS=ON \
-    -DCMAKE_AR=$(BUILD_PREFIX)/bin/ar \
-    -DCMAKE_MODULE_PATH=$(ROOT_DIR)/cmake \
-    -DCMAKE_TOOLCHAIN_FILE=$(ROOT_DIR)/wasi-sdk.cmake \
-    -DCMAKE_STAGING_PREFIX=$(PREFIX)/share/wasi-sysroot \
-    -DLLVM_CONFIG_PATH=$(ROOT_DIR)/build/llvm/bin/llvm-config \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCXX_SUPPORTS_CXX11=ON \
-    -DLIBCXX_ENABLE_THREADS:BOOL=OFF \
-    -DLIBCXX_HAS_PTHREAD_API:BOOL=OFF \
-    -DLIBCXX_HAS_EXTERNAL_THREAD_API:BOOL=OFF \
-    -DLIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY:BOOL=OFF \
-    -DLIBCXX_HAS_WIN32_THREAD_API:BOOL=OFF \
-    -DLLVM_COMPILER_CHECKED=ON \
-    -DCMAKE_BUILD_TYPE=RelWithDebugInfo \
-    -DLIBCXX_ENABLE_SHARED:BOOL=OFF \
-    -DLIBCXX_ENABLE_EXPERIMENTAL_LIBRARY:BOOL=OFF \
-    -DLIBCXX_ENABLE_EXCEPTIONS:BOOL=OFF \
-    -DLIBCXX_ENABLE_FILESYSTEM:BOOL=OFF \
-    -DLIBCXX_CXX_ABI=libcxxabi \
-    -DLIBCXX_CXX_ABI_INCLUDE_PATHS=$(LLVM_PROJ_DIR)/libcxxabi/include \
-    -DLIBCXX_HAS_MUSL_LIBC:BOOL=ON \
-    -DLIBCXX_ABI_VERSION=2 \
-    -DLIBCXXABI_ENABLE_EXCEPTIONS:BOOL=OFF \
-    -DLIBCXXABI_ENABLE_SHARED:BOOL=OFF \
-    -DLIBCXXABI_SILENT_TERMINATE:BOOL=ON \
-    -DLIBCXXABI_ENABLE_THREADS:BOOL=OFF \
-    -DLIBCXXABI_HAS_PTHREAD_API:BOOL=OFF \
-    -DLIBCXXABI_HAS_EXTERNAL_THREAD_API:BOOL=OFF \
-    -DLIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY:BOOL=OFF \
-    -DLIBCXXABI_HAS_WIN32_THREAD_API:BOOL=OFF \
-    -DLIBCXXABI_ENABLE_PIC:BOOL=OFF \
-    -DWASI_SDK_PREFIX=$(BUILD_PREFIX) \
-    -DUNIX:BOOL=ON \
-    --debug-trycompile
-
 build/libcxx.BUILT: build/llvm.BUILT build/compiler-rt.BUILT build/wasi-libc.BUILT
-	# Do the build.
 	mkdir -p build/libcxx
-	cd build/libcxx && cmake -G Ninja $(LIBCXX_CMAKE_FLAGS) \
-		-DCMAKE_SYSROOT=$(BUILD_PREFIX)/share/wasi-sysroot \
+	cd build/libcxx; cmake -G Ninja \
+		-DCMAKE_TOOLCHAIN_FILE=$(ROOT_DIR)/wasi-sdk.cmake \
+		-DLLVM_CONFIG_PATH=$(ROOT_DIR)/build/llvm/bin/llvm-config \
+		-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+		-DLIBCXX_ENABLE_THREADS:BOOL=OFF \
+		-DLIBCXX_HAS_PTHREAD_API:BOOL=OFF \
+		-DLIBCXX_HAS_EXTERNAL_THREAD_API:BOOL=OFF \
+		-DLIBCXX_BUILD_EXTERNAL_THREAD_LIBRARY:BOOL=OFF \
+		-DLIBCXX_HAS_WIN32_THREAD_API:BOOL=OFF \
+		-DCMAKE_BUILD_TYPE=RelWithDebugInfo \
+		-DLIBCXX_ENABLE_SHARED:BOOL=OFF \
+		-DLIBCXX_ENABLE_EXPERIMENTAL_LIBRARY:BOOL=OFF \
+		-DLIBCXX_ENABLE_EXCEPTIONS:BOOL=OFF \
+		-DLIBCXX_ENABLE_FILESYSTEM:BOOL=OFF \
+		-DLIBCXX_CXX_ABI=libcxxabi \
+		-DLIBCXX_CXX_ABI_INCLUDE_PATHS=$(LLVM_PROJ_DIR)/libcxxabi/include \
+		-DLIBCXX_HAS_MUSL_LIBC:BOOL=ON \
+		-DLIBCXX_ABI_VERSION=2 \
+		-DLIBCXX_LIBDIR_SUFFIX=/wasm32-wasi \
+		-DWASI_SDK_PREFIX=$(PREFIX) \
 		-DCMAKE_C_FLAGS="$(DEBUG_PREFIX_MAP)" \
 		-DCMAKE_CXX_FLAGS="$(DEBUG_PREFIX_MAP)" \
-		-DLIBCXX_LIBDIR_SUFFIX=$(ESCAPE_SLASH)/wasm32-wasi \
-		-DLIBCXXABI_LIBDIR_SUFFIX=$(ESCAPE_SLASH)/wasm32-wasi \
-		-DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
-		$(LLVM_PROJ_DIR)/runtimes
+		--debug-trycompile \
+		$(LLVM_PROJ_DIR)/libcxx
 	ninja $(NINJA_FLAGS) -C build/libcxx
-	# Do the install.
 	DESTDIR=$(DESTDIR) ninja $(NINJA_FLAGS) -C build/libcxx install
 	touch build/libcxx.BUILT
 
-build/config.BUILT:
-	mkdir -p $(BUILD_PREFIX)/share/misc
-	cp src/config/config.sub src/config/config.guess $(BUILD_PREFIX)/share/misc
-	mkdir -p $(BUILD_PREFIX)/share/cmake
-	cp wasi-sdk.cmake $(BUILD_PREFIX)/share/cmake
-	touch build/config.BUILT
+build/libcxxabi.BUILT: build/libcxx.BUILT build/llvm.BUILT
+	mkdir -p build/libcxxabi
+	cd build/libcxxabi; cmake -G Ninja \
+		-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+		-DCMAKE_CXX_COMPILER_WORKS=ON \
+		-DCMAKE_C_COMPILER_WORKS=ON \
+		-DLIBCXXABI_ENABLE_EXCEPTIONS:BOOL=OFF \
+		-DLIBCXXABI_ENABLE_SHARED:BOOL=OFF \
+		-DLIBCXXABI_SILENT_TERMINATE:BOOL=ON \
+		-DLIBCXXABI_ENABLE_THREADS:BOOL=OFF \
+		-DLIBCXXABI_HAS_PTHREAD_API:BOOL=OFF \
+		-DLIBCXXABI_HAS_EXTERNAL_THREAD_API:BOOL=OFF \
+		-DLIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY:BOOL=OFF \
+		-DLIBCXXABI_HAS_WIN32_THREAD_API:BOOL=OFF \
+		$(if $(patsubst 8.%,,$(CLANG_VERSION)),-DLIBCXXABI_ENABLE_PIC:BOOL=OFF,) \
+		-DCXX_SUPPORTS_CXX11=ON \
+		-DLLVM_COMPILER_CHECKED=ON \
+		-DCMAKE_BUILD_TYPE=RelWithDebugInfo \
+		-DLIBCXXABI_LIBCXX_PATH=$(LLVM_PROJ_DIR)/libcxx \
+		-DLIBCXXABI_LIBCXX_INCLUDES=$(PREFIX)/share/wasi-sysroot/include/c++/v1 \
+		-DLLVM_CONFIG_PATH=$(ROOT_DIR)/build/llvm/bin/llvm-config \
+		-DCMAKE_TOOLCHAIN_FILE=$(ROOT_DIR)/wasi-sdk.cmake \
+		-DLIBCXXABI_LIBDIR_SUFFIX=/wasm32-wasi \
+		-DWASI_SDK_PREFIX=$(PREFIX) \
+		-DCMAKE_C_FLAGS="$(DEBUG_PREFIX_MAP) -I$(PREFIX)/share/wasi-sysroot/include" \
+		-DCMAKE_CXX_FLAGS="$(DEBUG_PREFIX_MAP) -I$(PREFIX)/share/wasi-sysroot/include/c++/v1" \
+		-DUNIX:BOOL=ON \
+		--debug-trycompile \
+		$(LLVM_PROJ_DIR)/libcxxabi
+	ninja $(NINJA_FLAGS) -C build/libcxxabi
+	DESTDIR=$(DESTDIR) ninja $(NINJA_FLAGS) -C build/libcxxabi install
+	touch build/libcxxabi.BUILT
 
-build: build/llvm.BUILT build/wasi-libc.BUILT build/compiler-rt.BUILT build/libcxx.BUILT build/config.BUILT
+
+
+
+build: build/llvm.BUILT build/wasi-libc.BUILT build/compiler-rt.BUILT build/libcxx.BUILT 
 
 strip: build/llvm.BUILT
 	./strip_symbols.sh $(BUILD_PREFIX)
