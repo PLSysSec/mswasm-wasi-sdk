@@ -55,16 +55,10 @@ clean:
 build/llvm.BUILT:
 	mkdir -p build/llvm
 	cd build/llvm && cmake -G Ninja \
-		-DCMAKE_BUILD_TYPE=MinSizeRel \
 		-DCMAKE_INSTALL_PREFIX=$(PREFIX) \
 		-DLLVM_TARGETS_TO_BUILD=WebAssembly \
 		-DLLVM_DEFAULT_TARGET_TRIPLE=wasm32-wasi \
-		-DLLVM_ENABLE_PROJECTS="lld;clang;clang-tools-extra" \
-		$(if $(patsubst 9.%,,$(CLANG_VERSION)), \
-	             $(if $(patsubst 10.%,,$(CLANG_VERSION)), \
-		          -DDEFAULT_SYSROOT=../share/wasi-sysroot, \
-			  -DDEFAULT_SYSROOT=$(PREFIX)/share/wasi-sysroot), \
-		     -DDEFAULT_SYSROOT=$(PREFIX)/share/wasi-sysroot) \
+		-DLLVM_ENABLE_PROJECTS="clang;lld;compiler-rt;clang-tools-extra" \
 		-DLLVM_INSTALL_BINUTILS_SYMLINKS=TRUE \
 		-DLLVM_ENABLE_LIBXML2=OFF \
 		$(LLVM_PROJ_DIR)/llvm
