@@ -1,3 +1,15 @@
+# MS
+
+To build all:  
+```
+cd mswasm-wasi-sdk
+git submodule update --recursive --init
+make
+ln -s build/install/opt/wasi-sdk/lib/clang/11.0.0/lib/ build/install/opt/wasi-sdk/lib/clang/lib/
+```
+
+Below is the old WASI-sdk README
+
 # WASI SDK
 
 ## Quick Start
